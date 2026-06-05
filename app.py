@@ -1,56 +1,84 @@
-import streamlit as st
-import random
+import streamlit as style
+from google import genai
+from google.genai import types
+from google.genai.errors import APIError
 
-# 1. 앱 제목 및 소개
-st.set_page_config(page_title="방구석 연애코치", page_icon="💘")
-st.title("💘 방구석 AI 연애 코칭 앱")
-st.caption("지금 당신의 연애 고민을 해결해 드립니다. 가장 어울리는 상황을 선택하세요!")
+# 페이지 설정
+st.set_page_config(page_title="달콤살벌 연애상담소", page_icon="💖", layout="centered")
+st.title("💖 달콤살벌 연애상담소")
+st.caption("연애 고민, 썸, 이별 이야기까지 무엇이든 이야기해보세요. (gemini-2.5-flash-lite 적용)")
 
-# 2. 상황별 조언 데이터베이스
-COACHING_DATA = {
-    "썸 타는 중 (관계 발전 필요)": [
-        "선톡은 타이밍! 상대방이 퇴근하거나 일과가 끝날 시간(저녁 8시쯤)에 가벼운 질문으로 시작해보세요.",
-        "리액션이 반입니다. 상대방의 말에 '아 진짜요? 대박!' 같은 적극적인 공감만 해줘도 호감도가 올라가요.",
-        "단둘이 만날 명분을 만드세요. '맛있는 맛집을 찾았는데 같이 갈래요?'라며 자연스럽게 데이트 신청을 해보세요."
-    ],
-    "연애 중 (권태기 또는 갈등)": [
-        "익숙함에 속아 소중함을 잃지 마세요. 처음 만났던 장소에서 데이트를 하며 초심을 기억해보세요.",
-        "서운한 점을 말할 때는 '너 왜 그래?'가 아니라 '네가 그렇게 하니까 내 마음이 조금 서운했어(I-Message)'로 대화해보세요.",
-        "작은 서프라이즈를 준비해보세요. 거창한 선물이 아니더라도 평소 좋아하는 간식을 챙겨주는 것만으로도 감동을 줍니다."
-    ],
-    "짝사랑 중 (고백 타이밍 고민)": [
-        "상대방의 관심사를 먼저 파악하세요. 상대가 좋아하는 영화, 음식, 취미를 공유하면서 공감대를 넓혀가야 합니다.",
-        "부담스러운 고백은 금물! '나 너 좋아해!' 보다는 '너랑 있으면 시간 가는 줄 모르게 즐겁다'는 뉘앙스를 먼저 풍겨보세요.",
-        "눈빛을 피하지 마세요. 대화할 때 3초간 따뜻하게 아이컨택을 하는 것만으로도 묘한 기류를 만들 수 있습니다."
-    ],
-    "이별 후 (미련 또는 마음 정리)": [
-        "지나간 인연에 연연하지 마세요. 지금은 상대방이 아닌 '나 자신'에게 집중하고 스스로를 아껴줄 때입니다.",
-        "억지로 잊으려고 애쓰지 말고, 슬픈 감정이 들 때는 마음껏 슬퍼하세요. 시간이 생각보다 많은 것을 해결해 줍니다.",
-        "밤늦게 SNS를 찾아보거나 술 먹고 전화하는 것은 절대 금지! 이불 킥의 지름길입니다."
+# 1. Streamlit Secrets에서 API 키 불러오기 및 클라이언트 초기화
+try:
+    # Streamlit Cloud 배포 환경 또는 로컬 .streamlit/secrets.toml 환경
+    api_key = st.secrets["GEMINI_API_KEY"]
+    client = genai.Client(api_key=api_key)
+except KeyError:
+    st.error("API 키를 찾을 수 없습니다. Streamlit Secrets에 'GEMINI_API_KEY'를 설정해주세요.")
+    st.stop()
+except Exception as e:
+    st.error(f"초기화 중 오류가 발생했습니다: {e}")
+    st.stop()
+
+# 2. 세션 상태(Session State)로 채팅 기록 유지
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "assistant", "content": "안녕하세요! 당신의 연애 고민을 들어드릴 전문 상담사입니다. 어떤 고민이 있으신가요?"}
     ]
-}
 
-# 3. 사이드바 - 사용자 정보 입력
-st.sidebar.header("💌 코칭 프로필")
-user_name = st.sidebar.text_input("당신의 이름이나 닉네임", value="대박이")
-user_gender = st.sidebar.radio("당신의 성별", ["남성", "여성", "기타"])
+# 기존 채팅 메시지 화면에 표시
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
 
-# 4. 메인 화면 - 고민 선택
-st.subheader(f"반가워요, {user_name}님! 어떤 고민이 있으신가요?")
+# 3. 사용자 입력 처리
+if user_input := st.chat_input("고민을 입력해보세요... (예: 썸남이 선톡을 안 해요)"):
+    # 사용자 메시지 표시 및 저장
+    with st.chat_message("user"):
+        st.write(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
 
-situation = st.selectbox(
-    "현재 당신의 연애 상황을 선택하세요:",
-    list(COACHING_DATA.keys())
-)
-
-# 5. 코칭 결과 출력 버튼
-if st.button("🔥 AI 연애 코치에게 조언 받기"):
-    with st.spinner("코치님이 고민을 분석 중입니다..."):
-        advices = COACHING_DATA[situation]
-        selected_advice = random.choice(advices)
+    # AI 답변 생성 과정 및 오류 처리
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
         
-    st.balloons()  # 성공 효과 (풍선 날아감)
-    st.success("✨ 연애 코치의 비밀 처방전이 도착했습니다!")
-    
-    st.info(f"**[{situation}]에 대한 {user_name}님을 위한 조언**")
-    st.write(f"👉 \"{selected_advice}\"")
+        try:
+            # 페르소나 부여를 위한 시스템 명령어 설정
+            system_instruction = (
+                "당신은 공감 능력이 뛰어나면서도 때로는 뼈 때리는 조언을 해주는 전문 연애 상담사입니다. "
+                "사용자의 고민에 진심으로 공감해주고, 심리학적 관점이나 현실적인 조언을 섞어서 "
+                "친근한 말투(하오체나 존댓말을 섞은 다정한 톤)로 답변해주세요."
+            )
+            
+            # API 호출 (gemini-2.5-flash-lite 사용)
+            # 대화 기록 유지를 위해 전체 메시지 내역을 모델에 전달합니다.
+            contents = [
+                types.Content(
+                    role="user" if m["role"] == "user" else "model",
+                    parts=[types.Part.from_text(text=m["content"])]
+                ) for m in st.session_state.messages
+            ]
+
+            response = client.models.generate_content(
+                model='gemini-2.5-flash-lite',
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    temperature=0.7, # 적당한 창의성과 감정 표현을 위한 설정
+                )
+            )
+            
+            ai_response = response.text
+            message_placeholder.write(ai_response)
+            
+            # AI 메시지 세션에 저장
+            st.session_state.messages.append({"role": "assistant", "content": ai_response})
+
+        except APIError as ae:
+            # 구글 API 관련 에러 처리 (할당량 초과, 잘못된 키 등)
+            error_msg = f"구글 API 오류가 발생했습니다: {ae.message}"
+            message_placeholder.error(error_msg)
+        except Exception as e:
+            # 기타 예상치 못한 에러 처리
+            error_msg = f"죄송합니다, 답변을 생성하는 중 오류가 발생했습니다: {str(e)}"
+            message_placeholder.error(error_msg)
